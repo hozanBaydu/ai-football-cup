@@ -1,0 +1,16 @@
+# secrets
+.env
+*.env
+!.env.example
+
+# generated
+__pycache__/
+*.pyc
+*.mp4
+*.wav
+viewer/match_data.js
+viewer/config.js
+viewer/video.json
+viewer/renders/
+viewer/.k/
+.hyperframes/

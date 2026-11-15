@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="assets/lib/gsap.min.js"></script>
+    <script src="match_data.js"></script>
+    <script src="config.js"></script>
+    <style>
+      @font-face { font-family: "Segoe UI Black"; src: local("Segoe UI Black"), local("Arial Black"); font-weight: 900; }
+      @font-face { font-family: "Segoe UI"; src: local("Segoe UI Bold"), local("Segoe UI"), local("Arial Bold"); font-weight: 700; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: #17361f; }
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #17361f; }
+      #c { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+      .pre { position: absolute; left: -9999px; top: 0; width: 64px; height: 64px; }
+      #f1 { position: absolute; opacity: 0; font-family: "Segoe UI Black"; } #f2 { position: absolute; opacity: 0; font-family: "Segoe UI"; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="208.47" data-width="1920" data-height="1080" data-layout-allow-overlap data-layout-allow-overflow>
+      <canvas id="c" width="1920" height="1080" class="clip" data-start="0" data-duration="208.47" data-track-index="0"></canvas>
+      <img class="pre" id="L_claude" src="assets/logo/claude-color.svg"><img class="pre" id="L_chatgpt" src="assets/logo/openai.svg">
+      <img class="pre" id="L_gemini" src="assets/logo/gemini-color.svg"><img class="pre" id="L_grok" src="assets/logo/grok.svg">
+      <span id="f1">a</span><span id="f2">a</span>
+    </div>
+    <script>
+      const M = window.MAC, CFG = window.CFG, [PW, PH, GY0, GY1] = M.pitch;
+      const TEAMS = {
+        claude: { name: "CLAUDE OPUS 5.5", short: "CLAUDE", color: "#d97757", sign: ["GO CLAUDE!", "CLAUDE!!", "WE BELIEVE"] },
+        chatgpt: { name: "GPT-6.1 SOL", short: "CHATGPT", color: "#10a37f", sign: ["GO GPT!", "CHATGPT!!", "SOL POWER"] },
+        gemini: { name: "GEMINI 4 ARGON", short: "GEMINI", color: "#4f8df5", sign: ["GO GEMINI!", "GEMINI!!", "ARGON!!"] },
+        grok: { name: "GROK 4.7", short: "GROK", color: "#1b1b1b", sign: ["GO GROK!", "GROK!!!", "WE LOVE GROK"] },
+      };
+      const KEYS = CFG.teams, TA = TEAMS[KEYS[0]], TB = TEAMS[KEYS[1]], TT = [TA, TB], INTRO = CFG.introLen;
+      const ink = (T) => (T.color === "#1b1b1b" ? "#e9e9e9" : T.color);   // a readable text colour on dark backgrounds
+      const cv = document.getElementById("c"), g = cv.getContext("2d");
+      const SC = 33, X0 = 300, Y0 = 118, X = (x) => X0 + x * SC, Y = (y) => Y0 + y * SC;
+      const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), seg = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
+      const back = (t) => 1 + 2.7 * Math.pow(t - 1, 3) + 1.7 * Math.pow(t - 1, 2), out = (t) => 1 - Math.pow(1 - t, 3);
+      const hs = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+      const logo = (k) => document.getElementById("L_" + k);
+      const GOALS = M.events.filter((e) => e.type === "goal");
+
+      /* ---------- static pitch + stands ---------- */
+      const PITCH = document.createElement("canvas"); PITCH.width = 1920; PITCH.height = 1080;
+      {
+        const q = PITCH.getContext("2d");
+        q.fillStyle = "#17361f"; q.fillRect(0, 0, 1920, 1080);
+        [[0, 250], [1670, 250]].forEach(([x, w]) => { for (let r = 0; r < 9; r++) { q.fillStyle = r % 2 ? "#26303a" : "#2d3843"; q.fillRect(x, 120 + r * 90, w, 90); } });
+        for (let i = 0; i < 10; i++) { q.fillStyle = i % 2 ? "#3c9447" : "#43a04f"; q.fillRect(X(i * PW / 10), Y(0), SC * PW / 10 + 1, SC * PH); }
+        q.strokeStyle = "rgba(255,255,255,.9)"; q.lineWidth = 4; q.strokeRect(X(0), Y(0), SC * PW, SC * PH);
+        q.beginPath(); q.moveTo(X(PW / 2), Y(0)); q.lineTo(X(PW / 2), Y(PH)); q.stroke();
+        q.beginPath(); q.arc(X(PW / 2), Y(PH / 2), SC * 3.2, 0, 7); q.stroke();
+        q.fillStyle = "#fff"; q.beginPath(); q.arc(X(PW / 2), Y(PH / 2), 5, 0, 7); q.fill();
+        [[0, 1], [PW, -1]].forEach(([gx, s]) => {
+          q.strokeRect(Math.min(X(gx), X(gx + s * 6)), Y(6.5), SC * 6, SC * 12);
+          q.beginPath(); q.arc(X(gx + s * 6), Y(PH / 2), SC * 2.2, s > 0 ? -Math.PI / 2 : Math.PI / 2, s > 0 ? Math.PI / 2 : Math.PI * 1.5); q.stroke();
+          const gx0 = s > 0 ? X(gx) - SC * 1.3 : X(gx), gw = SC * 1.3;
+          q.fillStyle = "rgba(255,255,255,.12)"; q.fillRect(gx0, Y(GY0), gw, SC * (GY1 - GY0));
+          q.strokeStyle = "rgba(255,255,255,.35)"; q.lineWidth = 1.5;
+          for (let k = 0; k <= 6; k++) { q.beginPath(); q.moveTo(gx0 + (gw * k) / 6, Y(GY0)); q.lineTo(gx0 + (gw * k) / 6, Y(GY1)); q.stroke(); }
+          for (let k = 0; k <= 10; k++) { q.beginPath(); q.moveTo(gx0, Y(GY0) + (SC * (GY1 - GY0) * k) / 10); q.lineTo(gx0 + gw, Y(GY0) + (SC * (GY1 - GY0) * k) / 10); q.stroke(); }
+          q.strokeStyle = "#fff"; q.lineWidth = 6; q.beginPath(); q.moveTo(X(gx), Y(GY0)); q.lineTo(gx0 + (s > 0 ? 0 : gw), Y(GY0)); q.lineTo(gx0 + (s > 0 ? 0 : gw), Y(GY1)); q.lineTo(X(gx), Y(GY1)); q.stroke();
+          q.strokeStyle = "rgba(255,255,255,.9)"; q.lineWidth = 4;
+        });
+      }
+
+      /* ---------- fans: silent, only signs and movement ---------- */
+      const SKIN = ["#f1c7a5", "#d9a27a", "#a8704c", "#7a4b2e", "#ffd9bd"];
+      function mood(team, t) { const e = GOALS.filter((q) => q.t <= t && t - q.t < 3.5).pop(); if (!e) return 0; return e.team === team ? 1 : -1; }
+      function fans(team, x0, t, force) {
+        const T = TT[team], md = force === undefined ? mood(team, t) : force;
+        for (let r = 0; r < 8; r++) for (let c = 0; c < 3; c++) {
+          const id = team * 100 + r * 3 + c, ph = hs(id) * 6.28, x = x0 + 42 + c * 80 + (r % 2) * 18, y = 205 + r * 90;
+          const sp = md === 1 ? 14 : 3.2, amp = md === 1 ? 22 : md === -1 ? 0 : 5, yy = y - Math.abs(Math.sin(t * sp + ph)) * amp + (md === -1 ? 6 : 0);
+          g.fillStyle = T.color; g.beginPath(); g.roundRect(x - 20, yy - 6, 40, 44, 14); g.fill();
+          g.fillStyle = "#fff"; g.fillRect(x - 20, yy + 2, 40, 6);
+          g.strokeStyle = T.color; g.lineWidth = 8; g.lineCap = "round";
+          const up = md === 1 ? 1 : md === -1 ? -0.6 : 0.4 + 0.4 * Math.sin(t * 2.6 + ph);
+          [-1, 1].forEach((s) => { g.beginPath(); g.moveTo(x + s * 16, yy + 4); g.lineTo(x + s * (24 + 6 * up), yy - 12 - 22 * up); g.stroke(); });
+          g.fillStyle = SKIN[Math.floor(hs(id + 7) * 5)]; g.beginPath(); g.arc(x, yy - 20, 15, 0, 7); g.fill();
+          g.fillStyle = "#222"; g.beginPath(); g.arc(x - 5, yy - 21, 2.2, 0, 7); g.arc(x + 5, yy - 21, 2.2, 0, 7); g.fill();
+          g.strokeStyle = "#222"; g.lineWidth = 2.2; g.beginPath(); if (md === -1) g.arc(x, yy - 9, 5, 3.6, 5.8); else g.arc(x, yy - 16, md === 1 ? 6 : 4.5, 0.3, 2.8); g.stroke();
+          if ((r * 3 + c) % 4 === 1) { // a sign every few fans
+            const sy = yy - 62 + Math.sin(t * (md === 1 ? 10 : 2.4) + ph) * (md === 1 ? 8 : 3), txt = T.sign[(r + c) % 3];
+            g.strokeStyle = "#5b4636"; g.lineWidth = 4; g.beginPath(); g.moveTo(x, yy - 30); g.lineTo(x, sy + 14); g.stroke();
+            g.font = "900 17px 'Segoe UI Black'"; const w = Math.max(70, g.measureText(txt).width + 18), sx = clamp(x, x0 + w / 2 + 6, x0 + 244 - w / 2);
+            g.fillStyle = "#fffdf6"; g.strokeStyle = T.color; g.lineWidth = 3; g.beginPath(); g.roundRect(sx - w / 2, sy - 16, w, 32, 6); g.fill(); g.stroke();
+            g.fillStyle = T.color; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(txt, sx, sy + 1);
+          }
+        }
+      }
+
+      /* ---------- players: model emblems in equal circles ---------- */
+      function player(x, y, team, num, keeper, hold) {
+        const px = X(x), py = Y(y), r = 26, T = TT[team];
+        g.fillStyle = "rgba(0,0,0,.28)"; g.beginPath(); g.ellipse(px + 4, py + 7, r, r * 0.8, 0, 0, 7); g.fill();
+        if (hold) { g.strokeStyle = "#fff"; g.lineWidth = 5; g.beginPath(); g.arc(px, py, r + 9, 0, 7); g.stroke(); }
+        g.fillStyle = "#fff"; g.strokeStyle = T.color; g.lineWidth = 6; g.beginPath(); g.arc(px, py, r, 0, 7); g.fill(); g.stroke();
+        g.drawImage(logo(KEYS[team]), px - 16, py - 16, 32, 32);
+        const bx = px + 19, by = py + 17; g.fillStyle = keeper ? "#ffd166" : T.color; g.beginPath(); g.arc(bx, by, 12, 0, 7); g.fill();
+        g.strokeStyle = "#fff"; g.lineWidth = 2; g.stroke();
+        g.fillStyle = keeper ? "#111" : "#fff"; g.font = keeper ? "900 11px 'Segoe UI Black'" : "900 15px 'Segoe UI Black'"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(keeper ? "GK" : String(num), bx, by + 1);
+      }
+      let FLIP = false;
+      const BX = (x) => X(FLIP ? PW - x : x), BY = (y) => Y(FLIP ? PH - y : y);
+      function ball(fr, i) {
+        for (let k = 6; k >= 1; k--) { const f = M.frames[Math.max(0, i - k)]; if (fr[3] !== null) break; g.fillStyle = `rgba(255,255,255,${0.08 * (7 - k) / 6})`; g.beginPath(); g.arc(BX(f[1][0]), BY(f[1][1]), SC * 0.22, 0, 7); g.fill(); }
+        const bx = BX(fr[1][0]), by = BY(fr[1][1]), r = SC * 0.3;
+        g.fillStyle = "rgba(0,0,0,.3)"; g.beginPath(); g.ellipse(bx + 3, by + 5, r, r * 0.7, 0, 0, 7); g.fill();
+        g.fillStyle = "#fff"; g.strokeStyle = "#111"; g.lineWidth = 3; g.beginPath(); g.arc(bx, by, r, 0, 7); g.fill(); g.stroke();
+        g.fillStyle = "#111"; g.beginPath(); g.arc(bx, by, r * 0.38, 0, 7); g.fill();
+      }
+      function disc(k, x, y, r) { g.fillStyle = "#fff"; g.strokeStyle = TEAMS[k].color; g.lineWidth = r * 0.16; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.stroke(); g.drawImage(logo(k), x - r * 0.62, y - r * 0.62, r * 1.24, r * 1.24); }
+      const DEC = M.decisions || [];
+      function spent(team, t) { let c = 0; for (const d of DEC) { if (d.team === team && d.t <= t) c += d.cost; } return c; }
+      const SO = M.shootout || null, MEND = INTRO + M.length, PEN0 = MEND + 0.4, PK0 = PEN0 + 3.4, KICK = 3.6, HT = M.events.find((e) => e.type === "halftime");
+      const PENS = SO ? SO.pens : [], PEND = PK0 + PENS.length * KICK;
+      const SIDE_X = { left: 760, center: 960, right: 1160 }, AIM = { left: [705, 470], center: [960, 420], right: [1215, 470] }, MISS = { left: [540, 300], right: [1380, 300], center: [960, 260] };
+      function matchSpent(team) { let c = 0; for (const d of DEC) if (d.team === team) c += d.cost; return c; }
+      function penSpent(team, upto) { let c = matchSpent(team); for (let i = 0; i <= upto && i < PENS.length; i++) c += PENS[i].cost[team]; return c; }
+      function bubble(team, title, text, extra) {
+        g.font = "700 25px 'Segoe UI'"; const lines = wrap(text || "...", 640), w = 700, h = 62 + lines.length * 31, x = team ? 1810 - w : 110, y = 1074 - h;
+        g.fillStyle = "rgba(10,20,14,.92)"; g.beginPath(); g.roundRect(x, y, w, h, 14); g.fill(); g.fillStyle = ink(TT[team]); g.fillRect(x, y + 10, 8, h - 20);
+        g.font = "900 22px 'Segoe UI Black'"; g.fillStyle = ink(TT[team]); g.textAlign = "left"; g.textBaseline = "top"; g.fillText(title, x + 26, y + 14);
+        if (extra) { g.textAlign = "right"; g.fillStyle = "#ffd166"; g.fillText(extra, x + w - 22, y + 14); }
+        g.font = "700 25px 'Segoe UI'"; g.fillStyle = "#e8f2ea"; g.textAlign = "left"; lines.forEach((ln, i) => g.fillText(ln, x + 26, y + 46 + i * 31));
+      }
+      function stats(upto) {
+        const st = [{ pos: 0, shots: 0, saves: 0, passes: 0 }, { pos: 0, shots: 0, saves: 0, passes: 0 }];
+        for (const f of M.frames) { if (f[0] > upto) break; if (f[3] !== null) st[f[3] < 5 ? 0 : 1].pos++; }
+        for (const e of M.events) { if (e.t > upto) break; if (e.type === "shot") st[e.team].shots++; if (e.type === "save") st[e.team].saves++; if (e.type === "pass") st[e.team].passes++; }
+        const tot = st[0].pos + st[1].pos || 1; st[0].pct = Math.round((100 * st[0].pos) / tot); st[1].pct = 100 - st[0].pct; return st;
+      }
+      function statsPanel(y, upto, alpha) {
+        const S = stats(upto), rows = [["POSSESSION", S[0].pct + "%", S[1].pct + "%"], ["SHOTS", S[0].shots, S[1].shots], ["SAVES", S[0].saves, S[1].saves], ["PASSES", S[0].passes, S[1].passes]];
+        g.globalAlpha = alpha; g.fillStyle = "rgba(255,255,255,.07)"; g.beginPath(); g.roundRect(560, y - 40, 800, rows.length * 62 + 30, 22); g.fill();
+        rows.forEach(([lab, a, b], i) => { const yy = y + i * 62;
+          g.font = "700 26px 'Segoe UI'"; g.fillStyle = "#9fb8a6"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(lab, 960, yy);
+          g.font = "900 44px 'Segoe UI Black'"; g.fillStyle = ink(TA); g.textAlign = "left"; g.fillText(String(a), 610, yy);
+          g.fillStyle = ink(TB); g.textAlign = "right"; g.fillText(String(b), 1310, yy);
+          if (i === 0) { const w = 300; g.fillStyle = ink(TA); g.fillRect(810 - w / 2 + 150 - 150, yy + 22, 0, 0); } });
+        g.globalAlpha = 1;
+      }
+      function resultCard(t, t0, title, sc, extra) { // full-time card: score + stats
+        const k = seg(t, t0, t0 + 0.4); g.fillStyle = `rgba(6,12,8,${0.88 * k})`; g.fillRect(0, 0, 1920, 1080);
+        g.globalAlpha = k; g.textAlign = "center"; g.textBaseline = "middle";
+        g.font = "900 46px 'Segoe UI Black'"; g.fillStyle = "#cfe8d4"; g.fillText(title, 960, 200);
+        disc(KEYS[0], 640, 330, 64); disc(KEYS[1], 1280, 330, 64);
+        g.font = "900 130px 'Segoe UI Black'"; g.fillStyle = "#fff"; g.fillText(sc[0] + " - " + sc[1], 960, 335);
+        g.globalAlpha = 1; statsPanel(520, t0 < MEND ? HT.t : M.length, seg(t, t0 + 0.3, t0 + 0.7));
+        if (extra) { const k2 = seg(t, t0 + 1.4, t0 + 1.8); if (k2 > 0) { g.save(); g.translate(960, 900); g.scale(0.6 + 0.4 * back(k2), 0.6 + 0.4 * back(k2)); g.globalAlpha = k2;
+          g.font = "900 110px 'Segoe UI Black'"; g.lineWidth = 14; g.strokeStyle = "#111"; g.strokeText(extra, 0, 0); g.fillStyle = "#ffd166"; g.fillText(extra, 0, 0); g.restore(); g.globalAlpha = 1; } }
+      }
+      function winnerCard(t, t0, w, line2) {
+        const k = seg(t, t0, t0 + 0.45); g.fillStyle = `rgba(6,12,8,${0.97 * k})`; g.fillRect(0, 0, 1920, 1080); g.globalAlpha = k;
+        g.save(); g.shadowColor = TT[w].color === "#1b1b1b" ? "#fff" : TT[w].color; g.shadowBlur = 40 + 25 * Math.sin(t * 5); disc(KEYS[w], 960, 380, 120 * (0.7 + 0.3 * back(seg(t, t0, t0 + 0.5)))); g.restore();
+        if (CFG.stage === "final") trophy(960, 170, 1.0 + 0.04 * Math.sin(t * 4));
+        g.textAlign = "center"; g.textBaseline = "middle"; g.font = "900 104px 'Segoe UI Black'"; g.fillStyle = ink(TT[w]); g.fillText(TT[w].short + " WINS", 960, 600);
+        g.font = "900 46px 'Segoe UI Black'"; g.fillStyle = "#fff"; g.fillText(line2, 960, 690);
+        g.font = "900 40px 'Segoe UI Black'"; g.fillStyle = "#ffd166"; g.globalAlpha = k * seg(t, t0 + 0.6, t0 + 1.0); g.fillText(CFG.next || "", 960, 790); g.globalAlpha = 1;
+      }
+      function fullTime(t) { // between the match and the shootout
+        const fr = M.frames[M.frames.length - 1]; resultCard(t, PEN0, "FULL TIME", fr[4], "PENALTIES!");
+      }
+      function penScene(t) {
+        const i = clamp(Math.floor((t - PK0) / KICK), 0, PENS.length - 1), P = PENS[i], kt = t - PK0 - i * KICK, done = t >= PEND;
+        const sh = P.shooter, kp = 1 - sh, shotT = 0.9, resT = 1.35;
+        // background: stands + grass + goal seen from the front
+        g.fillStyle = "#17361f"; g.fillRect(0, 0, 1920, 1080);
+        [[0, 250], [1670, 250]].forEach(([x, w]) => { for (let r = 0; r < 9; r++) { g.fillStyle = r % 2 ? "#26303a" : "#2d3843"; g.fillRect(x, 120 + r * 90, w, 90); } });
+        for (let r = 0; r < 10; r++) { g.fillStyle = r % 2 ? "#3c9447" : "#43a04f"; g.fillRect(260, 120 + r * 96, 1400, 96); }
+        g.fillStyle = "rgba(255,255,255,.14)"; g.fillRect(600, 300, 720, 350);
+        g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 1.5;
+        for (let x = 600; x <= 1320; x += 30) { g.beginPath(); g.moveTo(x, 300); g.lineTo(x, 650); g.stroke(); }
+        for (let y = 300; y <= 650; y += 30) { g.beginPath(); g.moveTo(600, y); g.lineTo(1320, y); g.stroke(); }
+        g.strokeStyle = "#fff"; g.lineWidth = 14; g.lineCap = "round"; g.beginPath(); g.moveTo(600, 652); g.lineTo(600, 300); g.lineTo(1320, 300); g.lineTo(1320, 652); g.stroke();
+        g.lineWidth = 5; g.beginPath(); g.moveTo(300, 652); g.lineTo(1620, 652); g.stroke();
+        g.fillStyle = "#fff"; g.beginPath(); g.ellipse(960, 905, 14, 7, 0, 0, 7); g.fill();
+        // fans react to the last result
+        const lastRes = kt > resT ? P : (i > 0 ? PENS[i - 1] : null);
+        [0, 1].forEach((tm) => { let f = 0; if (lastRes && (kt > resT && kt < resT + 2)) f = lastRes.result === "goal" ? (lastRes.shooter === tm ? 1 : -1) : (lastRes.shooter === tm ? -1 : 1); fans(tm, tm ? 1670 : 0, t, f); });
+        // keeper: waits, then dives to the chosen side
+        const dk = out(seg(kt, shotT - 0.05, shotT + 0.35)), kx = 960 + (SIDE_X[P.dive] - 960) * dk, ky = 580 - Math.sin(Math.PI * dk) * (P.dive === "center" ? 70 : 40), rot = (P.dive === "left" ? -1 : P.dive === "right" ? 1 : 0) * 1.1 * dk;
+        g.save(); g.translate(kx, ky); g.rotate(rot);
+        [-1, 1].forEach((s) => { g.fillStyle = "#ffd166"; g.strokeStyle = "#111"; g.lineWidth = 4; g.beginPath(); g.arc(s * 78, -18 - 20 * dk, 20, 0, 7); g.fill(); g.stroke(); });
+        g.restore(); g.save(); g.translate(kx, ky); g.rotate(rot); disc(KEYS[kp], 0, 0, 62); g.restore();
+        // shooter runs up, then the ball flies
+        const run = seg(kt, 0.3, shotT), sx = 820 + 110 * run, sy = 1010 - 70 * run; disc(KEYS[sh], sx, sy, 52);
+        const bk = seg(kt, shotT, shotT + 0.42), tgt = P.result === "missed" ? MISS[P.aim] : AIM[P.aim];
+        let bx = 960 + (tgt[0] - 960) * out(bk), by = 900 + (tgt[1] - 900) * out(bk), br = 30 - 13 * out(bk);
+        if (P.result === "saved" && bk >= 1) { const rb = seg(kt, shotT + 0.42, shotT + 1.2); bx += (P.aim === "left" ? -1 : 1) * 220 * out(rb); by += 260 * out(rb); }
+        g.fillStyle = "rgba(0,0,0,.3)"; g.beginPath(); g.ellipse(bx + 4, by + 8, br, br * 0.6, 0, 0, 7); g.fill();
+        g.fillStyle = "#fff"; g.strokeStyle = "#111"; g.lineWidth = 3; g.beginPath(); g.arc(bx, by, br, 0, 7); g.fill(); g.stroke(); g.fillStyle = "#111"; g.beginPath(); g.arc(bx, by, br * 0.38, 0, 7); g.fill();
+        // tally board
+        g.fillStyle = "rgba(10,20,14,.9)"; g.beginPath(); g.roundRect(330, 8, 1260, 108, 22); g.fill();
+        disc(KEYS[0], 382, 62, 32); disc(KEYS[1], 1538, 62, 32);
+        const shown = PENS.filter((q, j) => j < i || (j === i && (kt > resT || done)));
+        [0, 1].forEach((tm) => { const mine = shown.filter((q) => q.shooter === tm), slots = Math.max(5, mine.length);
+          for (let j = 0; j < slots; j++) { const x = tm ? 1090 + j * 46 : 830 - j * 46, q = mine[j]; g.beginPath(); g.arc(x, 44, 16, 0, 7); g.fillStyle = !q ? "rgba(255,255,255,.15)" : q.result === "goal" ? "#3ddc84" : "#ff4d3d"; g.fill(); }
+          g.font = "700 24px 'Segoe UI'"; g.fillStyle = "#ffd166"; g.textAlign = tm ? "left" : "right"; g.textBaseline = "middle";
+          g.fillText("spent $" + penSpent(tm, kt > shotT ? i : i - 1).toFixed(4), tm ? 1090 - 16 : 830 + 16, 92); });
+        const sc = shown.length ? shown[shown.length - 1].score : [0, 0];
+        g.font = "900 50px 'Segoe UI Black'"; g.fillStyle = "#fff"; g.textAlign = "center"; g.fillText(sc[0] + " - " + sc[1], 960, 48);
+        g.font = "700 20px 'Segoe UI'"; g.fillStyle = "#cfe8d4"; g.fillText("PENALTY " + P.n, 960, 92);
+        // thoughts: choices are revealed when the ball is kicked
+        const rev = kt > shotT;
+        bubble(sh, TT[sh].short + " SHOOTS", P.shooter_thought, rev ? "aims " + P.aim.toUpperCase() : "");
+        bubble(kp, TT[kp].short + " IN GOAL", P.keeper_thought, rev ? "dives " + P.dive.toUpperCase() : "");
+        if (kt > resT && !done) { const k = seg(kt, resT, resT + 0.3), word = P.result === "goal" ? "GOAL!" : P.result === "saved" ? "SAVED!" : "MISSED!", col = P.result === "goal" ? TT[sh] : P.result === "saved" ? TT[kp] : { color: "#bbbbbb" };
+          g.save(); g.translate(960, 760); g.scale(0.6 + 0.4 * back(k), 0.6 + 0.4 * back(k)); g.font = "900 130px 'Segoe UI Black'"; g.textAlign = "center"; g.textBaseline = "middle";
+          g.lineWidth = 16; g.strokeStyle = "#111"; g.strokeText(word, 0, 0); g.fillStyle = col.color === "#1b1b1b" ? "#fff" : col.color; g.fillText(word, 0, 0); g.restore(); }
+        if (done) winnerCard(t, PEND, SO.winner, SO.score[0] + " - " + SO.score[1] + " ON PENALTIES");
+      }
+      function board(fr, t) {
+        const [a, b] = fr[4];
+        g.fillStyle = "rgba(10,20,14,.9)"; g.beginPath(); g.roundRect(330, 8, 1260, 108, 22); g.fill();
+        disc(KEYS[0], 382, 62, 32); disc(KEYS[1], 1538, 62, 32);
+        g.textBaseline = "middle"; g.font = "900 38px 'Segoe UI Black'";
+        g.fillStyle = ink(TA); g.textAlign = "right"; g.fillText(TA.name, 860, 44);
+        g.fillStyle = ink(TB); g.textAlign = "left"; g.fillText(TB.name, 1060, 44);
+        g.fillStyle = "#fff"; g.textAlign = "center"; g.font = "900 56px 'Segoe UI Black'"; g.fillText(`${a} - ${b}`, 960, 48);
+        const clk = fr[5] !== undefined ? fr[5] : t, PL = M.planned || M.length, two = M.halves === 2, h2 = two && clk >= PL / 2 - 1e-6;
+        const rem = Math.max(0, two ? (h2 ? PL - clk : PL / 2 - clk) : PL - clk), rs = Math.ceil(rem - 1e-6), mm = Math.floor(rs / 60), ss = rs % 60;
+        g.font = "700 22px 'Segoe UI'"; g.fillStyle = "#cfe8d4"; g.fillText(`${two ? (h2 ? "2ND HALF  " : "1ST HALF  ") : ""}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`, 960, 94);
+        // money spent so far, and a "+$" for every decision
+        [[0, 860, "right"], [1, 1060, "left"]].forEach(([team, x, al]) => {
+          g.font = "700 26px 'Segoe UI'"; g.textAlign = al; g.fillStyle = "#ffd166";
+          g.fillText("spent $" + spent(team, t).toFixed(4), x, 92);
+          const last = DEC.filter((d) => d.team === team && d.t <= t && t - d.t < 1.1).pop();
+          if (last) { const k = (t - last.t) / 1.1; g.globalAlpha = 1 - k; g.font = "900 24px 'Segoe UI Black'"; g.fillStyle = "#9cff9c";
+            g.fillText("+$" + last.cost.toFixed(4), al === "right" ? x - 250 : x + 250, 92 - k * 26); g.globalAlpha = 1; }
+        });
+      }
+      function wrap(text, maxW) { const words = text.split(" "), lines = []; let cur = ""; for (const w of words) { const n = cur ? cur + " " + w : w; if (g.measureText(n).width > maxW && cur) { lines.push(cur); cur = w; } else cur = n; } if (cur) lines.push(cur); return lines.slice(0, 3); }
+      function thoughtsAt(t) {
+        [0, 1].forEach((team) => {
+          let last = null; for (const th of M.thoughts) { if (th.team !== team) continue; if (th.t > t) break; last = th; }
+          if (!last) return;
+          g.font = "700 25px 'Segoe UI'"; const lines = wrap(last.text, 640), w = 700, h = 30 + lines.length * 31, x = team ? 1810 - w : 110, y = 1074 - h;
+          g.globalAlpha = 0.6 + 0.4 * seg(t - last.t, 0, 0.2);
+          g.fillStyle = "rgba(10,20,14,.92)"; g.beginPath(); g.roundRect(x, y, w, h, 14); g.fill();
+          g.fillStyle = ink(TT[team]); g.fillRect(x, y + 10, 8, h - 20);
+          g.fillStyle = "#e8f2ea"; g.textAlign = "left"; g.textBaseline = "top"; lines.forEach((ln, i) => g.fillText(ln, x + 26, y + 15 + i * 31));
+          g.globalAlpha = 1;
+        });
+      }
+      function goalFlash(t) {
+        const e = GOALS.filter((q) => q.t <= t && t - q.t < 2.0).pop(); if (!e) return;
+        const k = seg(t - e.t, 0, 0.35), s = 0.6 + 0.4 * back(k), fade = 1 - seg(t - e.t, 1.6, 2.0);
+        g.save(); g.globalAlpha = fade; g.translate(960, 500); g.scale(s, s);
+        g.font = "900 220px 'Segoe UI Black'"; g.textAlign = "center"; g.textBaseline = "middle";
+        g.lineWidth = 22; g.strokeStyle = "#111"; g.strokeText("GOAL!", 0, 0); g.fillStyle = TT[e.team].color === "#1b1b1b" ? "#fff" : TT[e.team].color; g.fillText("GOAL!", 0, 0);
+        disc(KEYS[e.team], 0, 165, 46); g.restore();
+      }
+
+      /* ---------- intro: the semi-final bracket; the teams of this match light up ---------- */
+      function introFinal(t) { // semi results, then the two winners move into the final
+        g.drawImage(PITCH, 0, 0); g.fillStyle = "rgba(8,14,10,.88)"; g.fillRect(0, 0, 1920, 1080);
+        const k0 = out(seg(t, 0, 0.6));
+        g.save(); g.globalAlpha = k0; g.textAlign = "center"; g.textBaseline = "middle";
+        g.font = "900 104px 'Segoe UI Black'"; g.fillStyle = "#ffd166"; g.fillText("AI FOOTBALL CUP", 960, 130 - (1 - k0) * 60);
+        g.font = "900 48px 'Segoe UI Black'"; g.fillStyle = "#cfe8d4"; g.fillText("THE FINAL", 960, 215); g.restore();
+        const mv = out(seg(t, 1.6, 2.3));
+        CFG.results.forEach(([a, b, sa, sb], i) => {
+          const k = out(seg(t, 0.4 + i * 0.3, 1.0 + i * 0.3)), y = 360 + i * 150, dx = (1 - k) * (i ? 1400 : -1400), win = sa > sb ? a : b;
+          g.save(); g.translate(dx, 0); g.globalAlpha = 1 - 0.55 * mv;
+          g.fillStyle = "rgba(255,255,255,.05)"; g.beginPath(); g.roundRect(480, y - 55, 960, 110, 24); g.fill();
+          [[a, 640, "right", sa], [b, 1280, "left", sb]].forEach(([key, cx, al, sc]) => {
+            const lost = key !== win, hide = !lost && mv > 0; g.save(); if (lost) g.globalAlpha *= 0.35;
+            if (!hide) disc(key, cx, y, 40);
+            g.font = "900 34px 'Segoe UI Black'"; g.textBaseline = "middle"; g.textAlign = al; g.fillStyle = ink(TEAMS[key]); g.fillText(TEAMS[key].short, al === "right" ? cx - 60 : cx + 60, y);
+            g.restore();
+          });
+          g.font = "900 44px 'Segoe UI Black'"; g.fillStyle = "#fff"; g.textAlign = "center"; g.fillText(sa + " - " + sb, 960, y + 2);
+          g.restore();
+          // the winner's emblem flies down into the final row
+          if (mv > 0) { const fx = i ? 1360 : 560, sx = (i ? 1280 : 640), fy = 760, x = sx + (fx - sx) * mv, yy = y + (fy - y) * mv, r = 40 + 26 * mv;
+            g.save(); g.shadowColor = TEAMS[win].color === "#1b1b1b" ? "#fff" : TEAMS[win].color; g.shadowBlur = 30 * mv + 25 * mv * (0.5 + 0.5 * Math.sin(t * 6)); disc(win, x, yy, r); g.restore(); }
+        });
+        if (mv > 0) { g.globalAlpha = mv; g.fillStyle = "rgba(255,209,102,.08)"; g.beginPath(); g.roundRect(330, 760 - 95, 1260, 190, 34); g.fill();
+          [[KEYS[0], 560, "right"], [KEYS[1], 1360, "left"]].forEach(([key, cx, al]) => { g.font = "900 54px 'Segoe UI Black'"; g.textAlign = al; g.textBaseline = "middle"; g.fillStyle = ink(TEAMS[key]); g.fillText(TEAMS[key].short, al === "right" ? cx - 100 : cx + 100, 760); });
+          g.font = "900 64px 'Segoe UI Black'"; g.fillStyle = "#fff"; g.textAlign = "center"; g.fillText("VS", 960, 762); g.globalAlpha = 1; }
+        const kl = seg(t, 2.4, 2.8); if (kl > 0) { g.globalAlpha = kl; g.font = "900 44px 'Segoe UI Black'"; g.fillStyle = "#ffd166"; g.textAlign = "center"; g.fillText(CFG.label, 960, 960); g.globalAlpha = 1; }
+        const fade = seg(t, INTRO - 0.45, INTRO); if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, 1920, 1080); }
+      }
+      function trophy(x, y, s) { // simple gold cup
+        g.save(); g.translate(x, y); g.scale(s, s); g.fillStyle = "#ffd166"; g.strokeStyle = "#b8860b"; g.lineWidth = 5;
+        g.beginPath(); g.moveTo(-70, -80); g.lineTo(70, -80); g.quadraticCurveTo(68, 20, 0, 40); g.quadraticCurveTo(-68, 20, -70, -80); g.fill(); g.stroke();
+        [-1, 1].forEach((d) => { g.beginPath(); g.arc(d * 78, -45, 26, d > 0 ? -1.4 : 1.4 - Math.PI, d > 0 ? 1.6 : 4.7); g.lineWidth = 10; g.strokeStyle = "#ffd166"; g.stroke(); });
+        g.fillRect(-12, 38, 24, 40); g.beginPath(); g.roundRect(-55, 76, 110, 26, 6); g.fill(); g.lineWidth = 5; g.strokeStyle = "#b8860b"; g.stroke(); g.restore();
+      }
+      function intro(t) { if (CFG.stage === "final") return introFinal(t);
+        g.drawImage(PITCH, 0, 0); g.fillStyle = "rgba(8,14,10,.88)"; g.fillRect(0, 0, 1920, 1080);
+        const k0 = out(seg(t, 0, 0.6));
+        g.save(); g.globalAlpha = k0; g.textAlign = "center"; g.textBaseline = "middle";
+        g.font = "900 104px 'Segoe UI Black'"; g.fillStyle = "#ffd166"; g.fillText("AI FOOTBALL CUP", 960, 150 - (1 - k0) * 60);
+        g.font = "900 40px 'Segoe UI Black'"; g.fillStyle = "#cfe8d4"; g.fillText("SEMI-FINALS", 960, 240); g.restore();
+        CFG.semis.forEach(([a, b], i) => {
+          const k = out(seg(t, 0.5 + i * 0.35, 1.2 + i * 0.35)), y = 440 + i * 230, dx = (1 - k) * (i ? 1400 : -1400);
+          g.save(); g.translate(dx, 0);
+          g.fillStyle = "rgba(255,255,255,.06)"; g.beginPath(); g.roundRect(330, y - 85, 1260, 170, 30); g.fill();
+          [[a, 560, "right"], [b, 1360, "left"]].forEach(([key, cx, al]) => {
+            const lit = CFG.highlight.includes(key), on = seg(t, 1.8, 2.2), pulse = 0.5 + 0.5 * Math.sin(t * 6);
+            g.globalAlpha = lit ? 1 : 1 - 0.65 * on;
+            if (lit && on > 0) { g.save(); g.shadowColor = TEAMS[key].color === "#1b1b1b" ? "#ffffff" : TEAMS[key].color; g.shadowBlur = 25 + 30 * pulse * on; disc(key, cx, y, 58 + 6 * on); g.restore(); } else disc(key, cx, y, 58);
+            g.font = "900 46px 'Segoe UI Black'"; g.textBaseline = "middle"; g.textAlign = al; g.fillStyle = ink(TEAMS[key]);
+            g.fillText(TEAMS[key].short, al === "right" ? cx - 90 : cx + 90, y);
+            g.globalAlpha = 1;
+          });
+          g.font = "900 54px 'Segoe UI Black'"; g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("VS", 960, y + 2);
+          g.restore();
+        });
+        const kl = seg(t, 2.2, 2.6); if (kl > 0) { g.globalAlpha = kl; g.font = "900 44px 'Segoe UI Black'"; g.fillStyle = "#ffd166"; g.textAlign = "center"; g.fillText(CFG.label, 960, 960); g.globalAlpha = 1; }
+        const fade = seg(t, INTRO - 0.45, INTRO); if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, 1920, 1080); }
+      }
+
+      function renderAt(T) {
+        g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1;
+        if (T < INTRO) { intro(T); return; }
+        if (SO && T >= PK0) { penScene(T); return; }
+        const mt = T - INTRO, i = clamp(Math.round(mt * M.fps), 0, M.frames.length - 1), fr = M.frames[i];
+        const flip = HT && fr[0] >= HT.t + 2.0 - 1e-6, F = (p) => (flip ? [PW - p[0], PH - p[1]] : p);   // teams change ends at half time
+        FLIP = flip; g.drawImage(PITCH, 0, 0);
+        fans(0, flip ? 1670 : 0, fr[0]); fans(1, flip ? 0 : 1670, fr[0]);
+        fr[2].forEach((p, k) => { const q = F(p); player(q[0], q[1], k < 5 ? 0 : 1, k % 5, k % 5 === 0, fr[3] === k); });
+        ball(fr, i); board(fr, fr[0]); thoughtsAt(fr[0]); goalFlash(fr[0]);
+        if (HT && fr[0] >= HT.t && fr[0] < HT.t + 2.0) resultCard(fr[0], HT.t, "HALF TIME", HT.score, null);
+        if (!SO && T >= MEND + 0.4) { const sc = M.score, w = sc[0] > sc[1] ? 0 : 1; resultCard(T, MEND + 0.4, "FULL TIME", sc, null); if (T >= MEND + 3.2) winnerCard(T, MEND + 3.2, w, sc[0] + " - " + sc[1]); }
+        const fin = seg(mt, 0, 0.35); if (fin < 1) { g.fillStyle = `rgba(0,0,0,${1 - fin})`; g.fillRect(0, 0, 1920, 1080); }
+        if (SO && T >= PEN0) fullTime(T);
+      }
+      const D = +document.getElementById("root").dataset.duration;
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = gsap.timeline({ paused: true }).to({}, { duration: D });
+      window.addEventListener("hf-seek", (e) => renderAt(e.detail.time));
+      renderAt(0);
+      document.fonts.ready.then(() => renderAt(0));
+    </script>
+  </body>
+</html>
